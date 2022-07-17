@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <optional>
 #include <variant>
-//#include <tuple>
 #include <ostream>
 
 
@@ -58,10 +57,7 @@ namespace svg {
     };
 
     using Color = std::variant<std::monostate, std::string, Rgb, Rgba>;
-    // Объявив в заголовочном файле константу со спецификатором inline,
-    // мы сделаем так, что она будет одной на все единицы трансляции,
-    // которые подключают этот заголовок.
-    // В противном случае каждая единица трансляции будет использовать свою копию этой константы
+    
     inline const Color NoneColor{ "none" };
 
     struct OstreamColorPrinter {
@@ -73,7 +69,6 @@ namespace svg {
         void operator()(Rgba rgba) const;
     };
 
-    //std::ostream& operator<<(std::ostream& out, const std::variant<std::monostate, std::string, svg::Rgb, svg::Rgba>& variant);
     std::ostream& operator<<(std::ostream& output, Color color);
 
     struct Point {
@@ -86,10 +81,6 @@ namespace svg {
         double y = 0;
     };
 
-    /*
-     * Вспомогательная структура, хранящая контекст для вывода SVG-документа с отступами.
-     * Хранит ссылку на поток вывода, текущее значение и шаг отступа при выводе элемента
-     */
     struct RenderContext {
         RenderContext(std::ostream& out)
             : out(out) {
@@ -139,11 +130,7 @@ namespace svg {
         std::optional<StrokeLineJoin> stroke_line_join_;
     };
 
-    /*
-     * Абстрактный базовый класс Object служит для унифицированного хранения
-     * конкретных тегов SVG-документа
-     * Реализует паттерн "Шаблонный метод" для вывода содержимого тега
-     */
+    
     class Object {
     public:
         void Render(const RenderContext& context) const;
@@ -154,14 +141,11 @@ namespace svg {
         virtual void RenderObject(const RenderContext& context) const = 0;
     };
 
-    /*
-     * Класс Circle моделирует элемент <circle> для отображения круга
-     * https://developer.mozilla.org/en-US/docs/Web/SVG/Element/circle
-     */
+
     class Circle final : public Object, public PathProps<Circle> {
     public:
         Circle& SetCenter(Point center);
-
+        
         Circle& SetRadius(double radius);
 
     private:
@@ -171,13 +155,9 @@ namespace svg {
         double radius_ = 1.0;
     };
 
-    /*
-     * Класс Polyline моделирует элемент <polyline> для отображения ломаных линий
-     * https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline
-     */
+
     class Polyline final : public Object, public PathProps<Polyline> {
     public:
-        // Добавляет очередную вершину к ломаной линии
         Polyline& AddPoint(Point point);
 
     private:
@@ -186,28 +166,14 @@ namespace svg {
         std::vector<Point> points_;
     };
 
-    /*
-     * Класс Text моделирует элемент <text> для отображения текста
-     * https://developer.mozilla.org/en-US/docs/Web/SVG/Element/text
-     */
+
     class Text final : public Object, public PathProps<Text> {
     public:
-        // Задаёт координаты опорной точки (атрибуты x и y)
         Text& SetPosition(Point pos);
-
-        // Задаёт смещение относительно опорной точки (атрибуты dx, dy)
         Text& SetOffset(Point offset);
-
-        // Задаёт размеры шрифта (атрибут font-size)
         Text& SetFontSize(uint32_t size);
-
-        // Задаёт название шрифта (атрибут font-family)
         Text& SetFontFamily(std::string font_family);
-
-        // Задаёт толщину шрифта (атрибут font-weight)
         Text& SetFontWeight(std::string font_weight);
-
-        // Задаёт текстовое содержимое объекта (отображается внутри тега text)
         Text& SetData(std::string data);
 
     private:
@@ -240,10 +206,8 @@ namespace svg {
 
     class Document : public ObjectContainer {
     public:
-        // Добавляет в svg-документ объект-наследник svg::Object
         void AddPtr(std::unique_ptr<Object>&& obj) override;
 
-        // Выводит в ostream svg-представление документа
         void Render(std::ostream& out) const;
 
     private:
@@ -313,8 +277,8 @@ namespace svg {
 
     template <typename Owner>
     Owner& PathProps<Owner>::AsOwner() {
-        // static_cast безопасно преобразует *this к Owner&,
-        // если класс Owner — наследник PathProps
+        // static_cast ГЎГҐГ§Г®ГЇГ Г±Г­Г® ГЇГ°ГҐГ®ГЎГ°Г Г§ГіГҐГІ *this ГЄ Owner&,
+        // ГҐГ±Г«ГЁ ГЄГ«Г Г±Г± Owner В— Г­Г Г±Г«ГҐГ¤Г­ГЁГЄ PathProps
         return static_cast<Owner&>(*this);
     }
 }  // namespace svg
