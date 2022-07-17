@@ -12,7 +12,6 @@ namespace catalogue {
             return std::abs(value) < EPSILON;
         }
 
-        // Проецирует широту и долготу в координаты внутри SVG-изображения
         svg::Point SphereProjector::operator()(geo::Coordinates coords) const {
             return {
                 (coords.lng - min_lon_) * zoom_coeff_ + padding_,
@@ -88,7 +87,7 @@ namespace catalogue {
         }
 
         svg::Document MapRenderer::CreatePolylinesRoutes(const BusesCoordinates&  bus_geo_coords,
-                                                   const SphereProjector proj) const {
+                                                         const SphereProjector proj) const {
             svg::Document document;
 
             size_t count = 0;
@@ -105,7 +104,7 @@ namespace catalogue {
 
                 ++count;
             }
-
+            
             return document;
         }
 
