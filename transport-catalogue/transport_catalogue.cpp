@@ -29,10 +29,10 @@ namespace catalogue {
 
 		for (const Stop* stop_ptr : bus.stops) {
 			if (stop_to_buses_.count(stop_ptr)) {
-				stop_to_buses_.at(stop_ptr).insert(bus_ptr->name);
+				stop_to_buses_.at(stop_ptr).insert(bus_ptr);
 			}
 			else {
-				stop_to_buses_[stop_ptr].insert(bus_ptr->name);
+				stop_to_buses_[stop_ptr].insert(bus_ptr);
 			}
 		}
 	}
@@ -125,15 +125,15 @@ namespace catalogue {
 	double TransportCatalogue::CalculateGeoLenghtRoute(std::string_view bus) const {
 		double distance = 0;
 
-		Coordinates from = { FindBus(bus)->stops[0]->latitude, FindBus(bus)->stops[0]->longitude };
+		geo::Coordinates from = { FindBus(bus)->stops[0]->latitude, FindBus(bus)->stops[0]->longitude };
 
 		for (size_t n = 1; n < FindBus(bus)->stops.size(); ++n) {
 			auto stop = FindBus(bus)->stops[n];
-			Coordinates to{ stop->latitude, stop->longitude };
+			geo::Coordinates to{ stop->latitude, stop->longitude };
 			distance += ComputeDistance(from, to);
 			from = to;
 		}
 		return distance;
 	}
 
-}
+} // namespace catalogue
