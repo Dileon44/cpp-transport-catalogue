@@ -21,7 +21,6 @@ namespace json {
                     break;
                 }
                 if (it == end) {
-                    // Поток закончился до того, как встретили конец слова true или false?
                     throw ParsingError("String parsing error");
                 }
                 str += *it;
@@ -36,7 +35,6 @@ namespace json {
 
             std::string parsed_num;
 
-            // Считывает в parsed_num очередной символ из input
             auto read_char = [&parsed_num, &input] {
                 parsed_num += static_cast<char>(input.get());
                 if (!input) {
@@ -44,7 +42,6 @@ namespace json {
                 }
             };
 
-            // Считывает одну или более цифр в parsed_num из input
             auto read_digits = [&input, read_char] {
                 if (!std::isdigit(input.peek())) {
                     throw ParsingError("A digit is expected"s);
@@ -57,24 +54,20 @@ namespace json {
             if (input.peek() == '-') {
                 read_char();
             }
-            // Парсим целую часть числа
             if (input.peek() == '0') {
                 read_char();
-                // После 0 в JSON не могут идти другие цифры
             }
             else {
                 read_digits();
             }
 
             bool is_int = true;
-            // Парсим дробную часть числа
             if (input.peek() == '.') {
                 read_char();
                 read_digits();
                 is_int = false;
             }
 
-            // Парсим экспоненциальную часть числа
             if (int ch = input.peek(); ch == 'e' || ch == 'E') {
                 read_char();
                 if (ch = input.peek(); ch == '+' || ch == '-') {
@@ -86,13 +79,11 @@ namespace json {
 
             try {
                 if (is_int) {
-                    // Сначала пробуем преобразовать строку в int
                     try {
                         return std::stoi(parsed_num);
                     }
                     catch (...) {
-                        // В случае неудачи, например, при переполнении,
-                        // код ниже попробует преобразовать строку в double
+                        
                     }
                 }
                 return std::stod(parsed_num);
@@ -119,7 +110,6 @@ namespace json {
                     break;
                 }
                 if (it == end) {
-                    // Поток закончился до того, как встретили закрывающую кавычку?
                     throw ParsingError("String parsing error");
                 }
                 str += *it;
@@ -129,8 +119,6 @@ namespace json {
             return result;
         }
 
-        // Считывает содержимое строкового литерала JSON-документа
-        // Функцию следует использовать после считывания открывающего символа ":
         std::string LoadString(std::istream& input) {
             using namespace std::literals;
 
@@ -139,24 +127,20 @@ namespace json {
             std::string s;
             while (true) {
                 if (it == end) {
-                    // Поток закончился до того, как встретили закрывающую кавычку?
                     throw ParsingError("String parsing error");
                 }
                 const char ch = *it;
                 if (ch == '"') {
-                    // Встретили закрывающую кавычку
                     ++it;
                     break;
                 }
                 else if (ch == '\\') {
-                    // Встретили начало escape-последовательности
                     ++it;
                     if (it == end) {
-                        // Поток завершился сразу после символа обратной косой черты
                         throw ParsingError("String parsing error");
                     }
                     const char escaped_char = *(it);
-                    // Обрабатываем одну из последовательностей: \\, \n, \t, \r, \"
+                    
                     switch (escaped_char) {
                     case 'n':
                         s.push_back('\n');
@@ -174,16 +158,13 @@ namespace json {
                         s.push_back('\\');
                         break;
                     default:
-                        // Встретили неизвестную escape-последовательность
                         throw ParsingError("Unrecognized escape sequence \\"s + escaped_char);
                     }
                 }
                 else if (ch == '\n' || ch == '\r') {
-                    // Строковый литерал внутри- JSON не может прерываться символами \r или \n
                     throw ParsingError("Unexpected end of line"s);
                 }
                 else {
-                    // Просто считываем очередной символ и помещаем его в результирующую строку
                     s.push_back(ch);
                 }
                 ++it;
@@ -196,14 +177,12 @@ namespace json {
             auto it = std::istreambuf_iterator<char>(input);
             auto end = std::istreambuf_iterator<char>();
             if (it == end) {
-                // Поток закончился до того, как встретили закрывающую кавычку?
                 throw ParsingError("String parsing error");
             }
 
             Array result;
             for (char c; input >> c && c != ']';) {
                 if (it == end) {
-                    // Поток закончился до того, как встретили закрывающую кавычку?
                     throw ParsingError("String parsing error");
                 }
 
@@ -220,14 +199,12 @@ namespace json {
             auto it = std::istreambuf_iterator<char>(input);
             auto end = std::istreambuf_iterator<char>();
             if (it == end) {
-                // Поток закончился до того, как встретили закрывающую кавычку?
                 throw ParsingError("String parsing error");
             }
 
             Dict result;
             for (char c; input >> c && c != '}';) {
                 if (it == end) {
-                    // Поток закончился до того, как встретили закрывающую кавычку?
                     throw ParsingError("String parsing error");
                 }
 
@@ -407,21 +384,18 @@ namespace json {
         , indent(indent) {
     }
 
-    // Перегрузка функции PrintValue для вывода значений null
     void PrintValue(std::nullptr_t, const PrintContext& ctx) {
         ctx.PrintIndent();
         ctx.out << "null"sv;
     }
 
-    // Перегрузка функции PrintValue для вывода значений string
     void PrintValue(std::string str, const PrintContext& ctx) {
-        //auto end = str.end();
         auto& out = ctx.out;
         out << "\"";
         for (auto it = str.begin(); it != str.end(); ++it) {
             if (*it == '\\' || *it == '\"' || *it == '\n' || *it == '\t' || *it == '\r') {
                 const char escaped_char = *(it);
-                // Обрабатываем одну из последовательностей: \\, \n, \t, \r, \"
+                
                 switch (escaped_char) {
                 case '\n':
                     out << "\\n";
@@ -432,14 +406,13 @@ namespace json {
                 case '\r':
                     out << "\\r";
                     break;
-                case '\"': // !!!
+                case '\"':
                     out << "\\\"";
                     break;
                 case '\\':
                     out << "\\\\";
                     break;
                 default:
-                    // Встретили неизвестную escape-последовательность
                     throw ParsingError("Unrecognized escape sequence \\"s + escaped_char);
                 }
             }
@@ -450,7 +423,6 @@ namespace json {
         out << "\"";
     }
 
-    // Перегрузка функции PrintValue для вывода значений bool
     void PrintValue(bool value, const PrintContext& ctx) {
         auto& out = ctx.out;
         out << ((value) ? "true"sv : "false"sv);
@@ -480,7 +452,6 @@ namespace json {
         }
     }
 
-    // Перегрузка функции PrintValue для вывода значений Array
     void PrintValue(const Array& value, const PrintContext& ctx) {
         auto& out = ctx.out;
         out << "["sv << std::endl;
@@ -499,7 +470,6 @@ namespace json {
         out << "]"sv;
     }
 
-    // Перегрузка функции PrintValue для вывода значений Dict
     void PrintValue(const Dict& dict, const PrintContext& ctx) {
         auto& out = ctx.out;
         out << "{"sv << std::endl;
