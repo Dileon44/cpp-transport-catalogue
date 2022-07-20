@@ -22,6 +22,7 @@ namespace catalogue {
 		TransportCatalogue& catalogue_;
 		RequestHandler& request_handler_;
 		renderer::MapRenderer& map_renderer_;
+		renderer::RenderSettings render_settings_;
 
 		json::Document base_requests_;
 		json::Document stat_requests_;
@@ -40,6 +41,8 @@ namespace catalogue {
 		std::map<std::string, json::Node> GenerateAnswerAboutStop(
 			const json::Node& request) const;
 		std::map<std::string, json::Node> GenerateAnswerAboutMap(int id) const;
+
+		std::set< const Bus*, CompareBuses > GetBuses() const;
 	};
 
 } // namespace catalogue
