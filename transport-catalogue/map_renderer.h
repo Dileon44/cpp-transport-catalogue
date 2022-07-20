@@ -17,31 +17,33 @@ namespace catalogue {
         bool IsZero(double value);
 
         struct RenderSettings {
-            double width;
-            double height;
-            double padding;
-            double line_width;
-            double stop_radius;
+            double width = 200;
+            double height = 200;
+            double padding = 30;
+            double line_width = 14;
+            double stop_radius = 5;
 
-            int bus_label_font_size;
-            std::vector<double> bus_label_offset;
+            int bus_label_font_size = 20;
+            std::vector<double> bus_label_offset{7, 15};
 
-            int stop_label_font_size;
-            std::vector<double> stop_label_offset;
+            int stop_label_font_size = 20;
+            std::vector<double> stop_label_offset{7, -3};
 
-            svg::Color underlayer_color;
-            double underlayer_width;
+            svg::Color underlayer_color = svg::Rgba{ 255, 255, 255, 0.85 };
+            double underlayer_width = 3;
 
-            std::vector<svg::Color> color_palette;
+            std::vector<svg::Color> color_palette{ "green", svg::Rgb{ 255,160,0 }, "red" };
         };
 
 
         class SphereProjector {
         public:
+            // points_begin и points_end задают начало и конец интервала элементов geo::Coordinates
             template <typename PointInputIt>
             SphereProjector(PointInputIt points_begin, PointInputIt points_end,
                 double max_width, double max_height, double padding);
 
+            // Проецирует широту и долготу в координаты внутри SVG-изображения
             svg::Point operator()(geo::Coordinates coords) const;
 
         private:
@@ -55,38 +57,41 @@ namespace catalogue {
 
         class MapRenderer {
         public:
-
-            RenderSettings& GetRenderSettings();
-            void AddBus(const Bus* bus);
-
-            svg::Document RenderMap() const;
+            svg::Document RenderMap(const renderer::RenderSettings& render_settings,
+                                    const std::set< const Bus*, CompareBuses >& buses) const;
 
         private:
-            RenderSettings render_settings_;
-            std::set< const Bus*, CompareBuses > buses_; // CompareBuses defined in domain.h
-
             std::pair<BusesCoordinates, std::vector<geo::Coordinates>>
-                HighlightBusesAndCoordinatesOfStops() const;
+                HighlightBusesAndCoordinatesOfStops(
+                    const std::set< const Bus*, CompareBuses >& buses) const;
 
-            svg::Document CreateVisualization(const BusesCoordinates& bus_geo_coords,
+            svg::Document CreateVisualization(const renderer::RenderSettings& render_settings, 
+                                              const std::set< const Bus*, CompareBuses >& buses,
+                                              const BusesCoordinates& bus_geo_coords,
                                               const SphereProjector proj) const;
 
-            svg::Document CreatePolylinesRoutes(const BusesCoordinates& bus_geo_coords,
+            svg::Document CreatePolylinesRoutes(const renderer::RenderSettings& render_settings,
+                                                const BusesCoordinates& bus_geo_coords,
                                                 const SphereProjector proj) const;
 
-            void SetPathPropsAttributesPolyline(svg::Polyline& polyline, size_t count) const;
+            void SetPathPropsAttributesPolyline(const renderer::RenderSettings& render_settings, 
+                                                svg::Polyline& polyline, size_t count) const;
 
-            void CreateRouteNames(svg::Document& document, const SphereProjector proj) const;
+            void CreateRouteNames(const renderer::RenderSettings& render_settings
+                                 , const std::set< const Bus*, CompareBuses >& buses
+                                 , svg::Document& document, const SphereProjector proj) const;
 
-            std::pair<svg::Text, svg::Text> CreateBackgroundAndTitleForRoute(svg::Point point
-                                                                             , std::string_view bus_name
-                                                                             , size_t count) const;
+            std::pair<svg::Text, svg::Text> CreateBackgroundAndTitleForRoute(
+                const renderer::RenderSettings& render_settings,
+                svg::Point point, std::string_view bus_name, size_t count) const;
 
-            void CreateStopIcons(svg::Document& document
+            void CreateStopIcons(const renderer::RenderSettings& render_settings
+                                , svg::Document& document
                                 , const std::set<const Stop*, CompareStop>& stops
                                 , const SphereProjector proj) const;
 
-            void CreateStopNames(svg::Document& document
+            void CreateStopNames(const renderer::RenderSettings& render_settings
+                                , svg::Document& document
                                 , const std::set<const Stop*, CompareStop>& stops
                                 , const SphereProjector proj) const;
         };
@@ -95,9 +100,10 @@ namespace catalogue {
         SphereProjector::SphereProjector(
             PointInputIt points_begin, PointInputIt points_end,
             double max_width, double max_height, double padding)
-            : padding_(padding) {
-                if (points_begin == points_end) {
-                    return;
+            : padding_(padding) //
+        {
+            if (points_begin == points_end) {
+                return;
             }
 
             const auto [left_it, right_it] = std::minmax_element(
