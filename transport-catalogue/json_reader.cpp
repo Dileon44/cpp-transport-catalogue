@@ -31,7 +31,7 @@ namespace catalogue {
 			stat_requests_ = json::Document{
 				input_doc.GetRoot().AsMap().at("stat_requests") 
 			};
-			map_renderer_.GetRenderSettings() = ReadJsonRenderSettings(
+			render_settings_ = ReadJsonRenderSettings(
 				input_doc.GetRoot().AsMap().at("render_settings").AsMap()
 			);
 		}
@@ -54,11 +54,11 @@ namespace catalogue {
 		settings.line_width = s.at("line_width").AsDouble();
 		settings.stop_radius = s.at("stop_radius").AsDouble();
 		settings.bus_label_font_size = s.at("bus_label_font_size").AsInt();
-		settings.bus_label_offset.push_back(s.at("bus_label_offset").AsArray()[0].AsDouble());
-		settings.bus_label_offset.push_back(s.at("bus_label_offset").AsArray()[1].AsDouble());
+		settings.bus_label_offset[0] = s.at("bus_label_offset").AsArray()[0].AsDouble();
+		settings.bus_label_offset[1] = s.at("bus_label_offset").AsArray()[1].AsDouble();
 		settings.stop_label_font_size = s.at("stop_label_font_size").AsInt();
-		settings.stop_label_offset.push_back(s.at("stop_label_offset").AsArray()[0].AsDouble());
-		settings.stop_label_offset.push_back(s.at("stop_label_offset").AsArray()[1].AsDouble());
+		settings.stop_label_offset[0] = s.at("stop_label_offset").AsArray()[0].AsDouble();
+		settings.stop_label_offset[1] = s.at("stop_label_offset").AsArray()[1].AsDouble();
 		settings.underlayer_color = ReadUnderlayerColor(s);
 		settings.underlayer_width = s.at("underlayer_width").AsDouble();
 		settings.color_palette = ReadColorPalette(s);
@@ -137,10 +137,6 @@ namespace catalogue {
 		for (const json::Node& bus_json : base_requests_.GetRoot().AsArray()) {
 			if (bus_json.AsMap().at("type") == "Bus") {
 				AddJsonBus(bus_json);
-				// adding a pointer to the route for database of the "MapRenderer" class
-				map_renderer_.AddBus(
-					catalogue_.FindBus(bus_json.AsMap().at("name").AsString())
-				);
 			}
 		}
 	}
@@ -189,14 +185,14 @@ namespace catalogue {
 
 		for (const json::Node& request : stat_requests_.GetRoot().AsArray()) {
 			if (request.AsMap().at("type") == "Bus") {
-				answers.push_back(json::Node{ GenerateAnswerAboutRoute(request) });
+				answers.push_back(GenerateAnswerAboutRoute(request));
 			}
 			else if (request.AsMap().at("type") == "Stop") {
-				answers.push_back(json::Node{ GenerateAnswerAboutStop(request) });
+				answers.push_back(GenerateAnswerAboutStop(request));
 			}
 			else {
 				answers.push_back(
-					json::Node{ GenerateAnswerAboutMap(request.AsMap().at("id").AsInt())}
+					GenerateAnswerAboutMap(request.AsMap().at("id").AsInt())
 				);
 			}
 		}
@@ -229,8 +225,7 @@ namespace catalogue {
 		return bus_info;
 	}
 
-	std::map<std::string, json::Node> JSONReader::GenerateAnswerAboutStop(
-															const json::Node& request) const {
+	std::map<std::string, json::Node> JSONReader::GenerateAnswerAboutStop(const json::Node& request) const {
 		std::map<std::string, json::Node> stop_info;
 		std::string_view stop_name = request.AsMap().at("name").AsString();
 
@@ -242,7 +237,7 @@ namespace catalogue {
 			}
 			std::sort(buses.begin(), buses.end(), [&](const json::Node& l, const json::Node& r) {
 					return std::lexicographical_compare(l.AsString().begin(), l.AsString().end(),
-														r.AsString().begin(), r.AsString().end());
+									    r.AsString().begin(), r.AsString().end());
 				}
 			);
 			stop_info.insert({ "buses", buses });
@@ -258,12 +253,26 @@ namespace catalogue {
 		std::ostringstream output;
 		std::map<std::string, json::Node> answer;
 
-		map_renderer_.RenderMap().Render(output);
+		std::set< const Bus*, CompareBuses > buses = std::move(GetBuses());
+
+		map_renderer_.RenderMap(render_settings_, buses).Render(output);
 
 		answer.insert({ "request_id", id });
 		answer.insert({ "map", output.str()});
 
 		return answer;
+	}
+
+	std::set< const Bus*, CompareBuses > JSONReader::GetBuses() const {
+		std::set< const Bus*, CompareBuses > buses;
+		for (const json::Node& bus_json : base_requests_.GetRoot().AsArray()) {
+			if (bus_json.AsMap().at("type") == "Bus") {
+				buses.insert(
+					catalogue_.FindBus(bus_json.AsMap().at("name").AsString())
+				);
+			}
+		}
+		return buses;
 	}
 
 	void JSONReader::PrintAnswer(std::ostream& output) {
