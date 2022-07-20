@@ -1,5 +1,7 @@
 #pragma once
 
+#include "geo.h"
+
 #include <string>
 #include <string_view>
 #include <set>
@@ -15,8 +17,7 @@ namespace catalogue {
 
 	struct Stop {
 		std::string name;
-		double latitude;
-		double longitude;
+		geo::Coordinates coordinate;
 	};
 
 	struct Bus {
@@ -27,7 +28,7 @@ namespace catalogue {
 
 	struct BusInfo {
 		bool bus_is_existing = false;
-		std::string name;
+		std::string name = "unknown bus";
 		size_t number_stops = 0;
 		size_t unique_stops = 0;
 		double length_route = 0;
@@ -36,7 +37,7 @@ namespace catalogue {
 
 	struct StopInfo {
 		bool to_exist = false;
-		std::string name;
+		std::string name = "unknown stop";
 		std::unordered_set<const Bus*> buses;
 	};
 
