@@ -1,2 +1,2 @@
-# cpp-transport-catalogue
+# TransportCatalogue
 Финальный проект: транспортный справочник
