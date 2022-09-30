@@ -9,10 +9,10 @@ namespace catalogue {
 
 	class JSONReader {
 	public:
-		JSONReader(TransportCatalogue& catalogue, 
-				   RequestHandler& request_handler_,
-				   renderer::MapRenderer& map_renderer);
-		
+		JSONReader(TransportCatalogue& catalogue,
+			RequestHandler& request_handler_,
+			renderer::MapRenderer& map_renderer);
+
 		void ReadJSON(std::istream& input);
 		void BuildDataBase();
 		void GenerateAnswer();
@@ -36,11 +36,9 @@ namespace catalogue {
 		void AddDistanceBetweenStops(const json::Node& stop_from);
 		void AddJsonBus(const json::Node& node);
 
-		std::map<std::string, json::Node> GenerateAnswerAboutRoute(
-			const json::Node& request) const;
-		std::map<std::string, json::Node> GenerateAnswerAboutStop(
-			const json::Node& request) const;
-		std::map<std::string, json::Node> GenerateAnswerAboutMap(int id) const;
+		json::Node GenerateAnswerAboutRoute(const json::Node& request);
+		json::Node GenerateAnswerAboutStop(const json::Node& request);
+		json::Node GenerateAnswerAboutMap(int id);
 
 		std::set< const Bus*, CompareBuses > GetBuses() const;
 	};
