@@ -10,7 +10,6 @@ namespace json {
 	class DictItemContext;
 	class KeyItemContext;
 	class ArrayItemContext;
-	//class Builder;
 
 	class Builder {
 	public:
@@ -28,6 +27,9 @@ namespace json {
 	private:
 		Node root_;
 		std::vector<Node*> nodes_stack_;
+
+		template<typename Container>
+		Builder& StartContainer(Container container);
 	};
 
 	// 1
@@ -62,4 +64,24 @@ namespace json {
 	private:
 		Builder& builder_;
 	};
+
+	template<typename Container>
+	Builder& Builder::StartContainer(Container container) {
+		if (nodes_stack_.empty() && std::holds_alternative<nullptr_t>(root_.GetValue())) {
+			root_ = container;
+			nodes_stack_.push_back(&root_);
+		}
+		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsNull()) {
+			nodes_stack_.back()->GetNoConstValue() = container;
+		}
+		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsArray()) {
+			std::get<Array>(nodes_stack_.back()->GetNoConstValue()).push_back(container);
+			nodes_stack_.emplace_back(&(std::get<Array>(nodes_stack_.back()->GetNoConstValue()).back()));
+		}
+		else {
+			throw std::logic_error("Failed StartArray()");
+		}
+
+		return *this;
+	}
 }
