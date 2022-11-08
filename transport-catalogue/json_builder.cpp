@@ -97,22 +97,7 @@ namespace json {
 	}
 
 	DictItemContext Builder::StartDict() {
-		if (nodes_stack_.empty() && std::holds_alternative<nullptr_t>(root_.GetValue())) {
-			root_ = Dict{};
-			nodes_stack_.push_back(&root_);
-		}
-		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsNull()) {
-			nodes_stack_.back()->GetNoConstValue() = Dict{};
-		}
-		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsArray()) {
-			std::get<Array>(nodes_stack_.back()->GetNoConstValue()).push_back(Dict{});
-			nodes_stack_.emplace_back(&(std::get<Array>(nodes_stack_.back()->GetNoConstValue())).back());
-		}
-		else {
-			throw std::logic_error("Failed StartDict()"s);
-		}
-
-		return DictItemContext{ *this };
+		return DictItemContext{ this->StartContainer(Dict{}) };
 	}
 
 	Builder& Builder::EndDict() {
@@ -127,22 +112,7 @@ namespace json {
 	}
 
 	ArrayItemContext Builder::StartArray() {
-		if (nodes_stack_.empty() && std::holds_alternative<nullptr_t>(root_.GetValue())) {
-			root_ = Array{};
-			nodes_stack_.push_back(&root_);
-		}
-		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsNull()) {
-			nodes_stack_.back()->GetNoConstValue() = Array{};
-		}
-		else if (!nodes_stack_.empty() && nodes_stack_.back()->IsArray()) {
-			std::get<Array>(nodes_stack_.back()->GetNoConstValue()).push_back(Array{});
-			nodes_stack_.emplace_back(&std::get<Array>(nodes_stack_.back()->GetNoConstValue()).back());
-		}
-		else {
-			throw std::logic_error("Failed StartArray()"s);
-		}
-
-		return ArrayItemContext{ *this };
+		return ArrayItemContext{ this->StartContainer(Array{}) };
 	}
 
 	Builder& Builder::EndArray() {
