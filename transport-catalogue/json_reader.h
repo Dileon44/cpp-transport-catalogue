@@ -1,22 +1,40 @@
 #pragma once
 
+#include "domain.h"
 #include "json.h"
 #include "transport_catalogue.h"
 #include "request_handler.h"
 #include "map_renderer.h"
+#include "router.h"
+#include "transport_router.h"
+
+#include <variant>
 
 namespace catalogue {
 
+	struct Data {
+		json::Document base_requests;
+		json::Document stat_requests;
+		renderer::RenderSettings render_settings;
+		RoutingSettings routing_settings;
+	};
+
 	class JSONReader {
 	public:
-		JSONReader(TransportCatalogue& catalogue,
+		JSONReader(
+			TransportCatalogue& catalogue,
 			RequestHandler& request_handler_,
-			renderer::MapRenderer& map_renderer);
+			renderer::MapRenderer& map_renderer
+		);
 
-		void ReadJSON(std::istream& input);
-		void BuildDataBase();
-		void GenerateAnswer();
-		void PrintAnswer(std::ostream& output);
+		Data ReadJSON(std::istream& input) const;
+
+		void BuildDataBase(const Data& data);
+
+		json::Document GenerateAnswer(const TransportRouter& transport_router,
+									  const json::Document& stat_requests) const;
+
+		void PrintAnswer(std::ostream& output, const json::Document& answers);
 
 	private:
 		TransportCatalogue& catalogue_;
@@ -24,23 +42,25 @@ namespace catalogue {
 		renderer::MapRenderer& map_renderer_;
 		renderer::RenderSettings render_settings_;
 
-		json::Document base_requests_;
-		json::Document stat_requests_;
-		json::Document answers_;
+		json::Node ConvertEdgeInfo(const EdgeId edge_id) const;
 
-		renderer::RenderSettings ReadJsonRenderSettings(const json::Node& settings) const;
+		std::optional<graph::Router<double>::RouteInfo> BuildRoute(
+			const TransportRouter& transport_router, const json::Node& request) const;
+
 		svg::Color ReadUnderlayerColor(const std::map<std::string, json::Node>& s) const;
 		std::vector<svg::Color> ReadColorPalette(const std::map<std::string, json::Node>& s) const;
+		renderer::RenderSettings CreateRenderSettings(const json::Node& settings) const;
+		RoutingSettings CreateRoutingSettings(const json::Node& input_node) const;
 
 		void AddNameAndCoordinatesOfStop(const json::Node& node);
 		void AddDistanceBetweenStops(const json::Node& stop_from);
 		void AddJsonBus(const json::Node& node);
 
-		json::Node GenerateAnswerAboutRoute(const json::Node& request);
-		json::Node GenerateAnswerAboutStop(const json::Node& request);
-		json::Node GenerateAnswerAboutMap(int id);
-
-		std::set< const Bus*, CompareBuses > GetBuses() const;
+		json::Node GenerateAnswerBus(const json::Node& request) const;
+		json::Node GenerateAnswerStop(const json::Node& request) const;
+		json::Node GenerateAnswerMap(const int id) const;
+		json::Node GenerateAnswerRoute(const TransportRouter& transport_router,	
+			const json::Node& request) const;
 	};
 
 } // namespace catalogue
