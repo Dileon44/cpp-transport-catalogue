@@ -1,5 +1,9 @@
 #include "json_reader.h"
 #include "json_builder.h"
+#include "graph.h"
+#include "router.h"
+#include "domain.h"
+#include "transport_router.h"
 
 #include <stdexcept>
 #include <vector>
@@ -7,43 +11,56 @@
 #include <algorithm> 
 #include <utility>
 #include <sstream>
-
-#include "log_duration.h"
+#include <unordered_set>
 
 namespace catalogue {
 
-	JSONReader::JSONReader(TransportCatalogue& catalogue,
-							RequestHandler& request_handler,
-							renderer::MapRenderer& map_renderer)
+	JSONReader::JSONReader(
+		TransportCatalogue& catalogue,
+		RequestHandler& request_handler,
+		renderer::MapRenderer& map_renderer)
+
 		: catalogue_(catalogue)
 		, request_handler_(request_handler)
 		, map_renderer_(map_renderer) {
 	}
 
-	void JSONReader::ReadJSON(std::istream& input) {
+	bool CheckResenceSettings(const json::Node& input_node) {
+
+		return input_node.AsDict().count("base_requests")
+			&& input_node.AsDict().count("stat_requests")
+			&& input_node.AsDict().count("render_settings")
+			&& input_node.AsDict().count("routing_settings");
+	}
+
+	Data JSONReader::ReadJSON(std::istream& input) const {
 		json::Document input_doc = std::move(json::Load(input));
+		const json::Node& input_node = input_doc.GetRoot();
 
-		if (input_doc.GetRoot().IsDict()
-			&& input_doc.GetRoot().AsDict().count("base_requests")
-			&& input_doc.GetRoot().AsDict().count("stat_requests")
-			&& input_doc.GetRoot().AsDict().count("render_settings")) {
+		Data db_documents;
 
-			base_requests_ = json::Document{
-				input_doc.GetRoot().AsDict().at("base_requests")
-			};
-			stat_requests_ = json::Document{
-				input_doc.GetRoot().AsDict().at("stat_requests")
-			};
-			render_settings_ = ReadJsonRenderSettings(
-				input_doc.GetRoot().AsDict().at("render_settings").AsDict()
-			);
+		if (input_node.IsDict() && CheckResenceSettings(input_node)) {
+			db_documents.base_requests = std::move(json::Document{
+				input_node.AsDict().at("base_requests")
+				});
+			db_documents.stat_requests = std::move(json::Document{
+				input_node.AsDict().at("stat_requests")
+				});
+			db_documents.render_settings = std::move(CreateRenderSettings(
+				input_node.AsDict().at("render_settings").AsDict()
+			));
+			db_documents.routing_settings = std::move(CreateRoutingSettings(
+				input_node.AsDict().at("routing_settings").AsDict()
+			));
 		}
 		else {
 			throw std::logic_error("incorrect input data");
 		}
+
+		return db_documents;
 	}
 
-	renderer::RenderSettings JSONReader::ReadJsonRenderSettings(
+	renderer::RenderSettings JSONReader::CreateRenderSettings(
 		const json::Node& settings_json) const {
 		if (settings_json.AsDict().empty()) {
 			return renderer::RenderSettings{};
@@ -126,30 +143,44 @@ namespace catalogue {
 		return color_palette;
 	}
 
-	void JSONReader::BuildDataBase() {
-		for (const json::Node& stop_json : base_requests_.GetRoot().AsArray()) {
-			if (stop_json.IsDict() && stop_json.AsDict().at("type") == "Stop") {
-				AddNameAndCoordinatesOfStop(stop_json);
+	RoutingSettings JSONReader::CreateRoutingSettings(const json::Node& route_settings_node) const {
+		double bus_velocity = double(route_settings_node.AsDict().at("bus_velocity").AsInt()) * 1000 / 60;
+		double bus_wait_time = double(route_settings_node.AsDict().at("bus_wait_time").AsInt());
+
+		return RoutingSettings{ bus_velocity, bus_wait_time };
+	}
+
+	void JSONReader::BuildDataBase(const Data& data) {
+		render_settings_ = data.render_settings;
+		catalogue_.SetRoutingSettings(data.routing_settings);
+
+		for (const json::Node& json_doc : data.base_requests.GetRoot().AsArray()) {
+			if (json_doc.IsDict() && json_doc.AsDict().at("type") == "Stop") {
+				AddNameAndCoordinatesOfStop(json_doc);
 			}
 		}
-		for (const json::Node& stop_from : base_requests_.GetRoot().AsArray()) {
+
+		for (const json::Node& stop_from : data.base_requests.GetRoot().AsArray()) {
 			if (stop_from.IsDict() && stop_from.AsDict().at("type") == "Stop") {
 				AddDistanceBetweenStops(stop_from);
 			}
 		}
-		for (const json::Node& bus_json : base_requests_.GetRoot().AsArray()) {
+
+		for (const json::Node& bus_json : data.base_requests.GetRoot().AsArray()) {
 			if (bus_json.AsDict().at("type") == "Bus") {
 				AddJsonBus(bus_json);
 			}
 		}
 	}
 
+
+
 	void JSONReader::AddNameAndCoordinatesOfStop(const json::Node& node) {
 		catalogue_.AddStop(
 			{
-			  node.AsDict().at("name").AsString()
-			, node.AsDict().at("latitude").AsDouble()
-			, node.AsDict().at("longitude").AsDouble()
+			  node.AsDict().at("name").AsString(),
+			  node.AsDict().at("latitude").AsDouble(),
+			  node.AsDict().at("longitude").AsDouble()
 			}
 		);
 	}
@@ -183,24 +214,28 @@ namespace catalogue {
 		catalogue_.AddBus(bus);
 	}
 
-	void JSONReader::GenerateAnswer() {
+	json::Document JSONReader::GenerateAnswer(const TransportRouter& transport_router,
+		const json::Document& stat_requests) const {
 		std::vector<json::Node> answers;
 
-		for (const json::Node& request : stat_requests_.GetRoot().AsArray()) {
+		for (const json::Node& request : stat_requests.GetRoot().AsArray()) {
 			if (request.AsDict().at("type") == "Bus") {
-				answers.push_back(std::move(GenerateAnswerAboutRoute(request)));
+				answers.push_back(std::move(GenerateAnswerBus(request)));
 			}
 			else if (request.AsDict().at("type") == "Stop") {
-				answers.push_back(std::move(GenerateAnswerAboutStop(request)));
+				answers.push_back(std::move(GenerateAnswerStop(request)));
+			}
+			else if (request.AsDict().at("type") == "Route") {
+				answers.push_back(std::move(GenerateAnswerRoute(transport_router, request)));
 			}
 			else {
-				answers.push_back(std::move(GenerateAnswerAboutMap(request.AsDict().at("id").AsInt())));
+				answers.push_back(std::move(GenerateAnswerMap(request.AsDict().at("id").AsInt())));
 			}
 		}
-		answers_ = std::move(json::Document{ answers });
+		return json::Document{ answers };
 	}
 
-	json::Node JSONReader::GenerateAnswerAboutRoute(const json::Node& request) {
+	json::Node JSONReader::GenerateAnswerBus(const json::Node& request) const {
 		std::string_view bus_name = request.AsDict().at("name").AsString();
 		json::Builder answer;
 		answer.StartDict().Key("request_id").Value(request.AsDict().at("id").AsInt());
@@ -219,7 +254,7 @@ namespace catalogue {
 		return answer.Build();
 	}
 
-	json::Node JSONReader::GenerateAnswerAboutStop(const json::Node& request) {
+	json::Node JSONReader::GenerateAnswerStop(const json::Node& request) const {
 		std::string_view stop_name = request.AsDict().at("name").AsString();
 		json::Builder answer;
 		answer.StartDict().Key("request_id").Value(request.AsDict().at("id").AsInt());
@@ -229,7 +264,6 @@ namespace catalogue {
 			std::vector<json::Node> buses;
 			for (const auto& bus : request_handler_.GetBusesByStop(stop_name)) {
 				buses.push_back(bus->name);
-				//answers.Value(bus->name);
 			}
 			std::sort(buses.begin(), buses.end(), [&](const json::Node& l, const json::Node& r) {
 				return std::lexicographical_compare(l.AsString().begin(), l.AsString().end(),
@@ -250,35 +284,86 @@ namespace catalogue {
 		return answer.Build();
 	}
 
-	json::Node JSONReader::GenerateAnswerAboutMap(int id) {
+	json::Node JSONReader::GenerateAnswerRoute(const TransportRouter& transport_router,
+		const json::Node& request) const {
+
+		auto route_info = BuildRoute(transport_router, request);
+		if (!route_info) {
+			return json::Builder{}.StartDict().
+				Key("request_id").Value(request.AsDict().at("id").AsInt()).
+				Key("error_message").Value("not found").
+				EndDict().Build();
+		}
+
+		json::Array items;
+		for (const auto& edge_id : route_info->edges) {
+			items.emplace_back(ConvertEdgeInfo(edge_id));
+		}
+
+		return json::Builder{}.StartDict()
+			.Key("request_id").Value(request.AsDict().at("id").AsInt())
+			.Key("total_time").Value(route_info->weight)
+			.Key("items").Value(items)
+			.EndDict().Build();
+	}
+
+	json::Node JSONReader::ConvertEdgeInfo(const EdgeId edge_id) const {
+
+		if (std::holds_alternative<EdgeBusInfo>(catalogue_.GetEdgeInfo(edge_id))) {
+			const EdgeBusInfo edge_info = std::get<EdgeBusInfo>(catalogue_.GetEdgeInfo(edge_id));
+
+			return json::Builder{}.StartDict()
+				.Key("type").Value("Bus")
+				.Key("bus").Value(std::string(edge_info.bus->name))
+				.Key("span_count").Value(static_cast<int>(edge_info.span_count))
+				.Key("time").Value(edge_info.weight)
+			.EndDict().Build();
+		}
+
+		const EdgeWaitInfo edge_info = std::get<EdgeWaitInfo>(catalogue_.GetEdgeInfo(edge_id));
+
+		return json::Builder{}.StartDict()
+			.Key("type").Value("Wait")
+			.Key("stop_name").Value(std::string(edge_info.stop->name))
+			.Key("time").Value(edge_info.weight)
+		.EndDict().Build();
+	}
+
+	std::optional<graph::Router<double>::RouteInfo> JSONReader::BuildRoute(const TransportRouter& transport_router,
+		const json::Node& request) const {
+		
+		const VertexId from = catalogue_.GetPairVertexesId(request.AsDict().at("from").AsString()).begin_wait;
+		const VertexId to = catalogue_.GetPairVertexesId(request.AsDict().at("to").AsString()).begin_wait;
+
+		auto route_info_ptr = transport_router.BuildRoute(from, to);
+		if (!route_info_ptr) {
+			return {};
+		}
+
+		return route_info_ptr;
+	}
+
+	json::Node JSONReader::GenerateAnswerMap(const int id) const {
 		std::ostringstream output;
 
-		std::set< const Bus*, CompareBuses > buses = std::move(GetBuses());
+		std::set< const Bus*, CompareBuses > buses;
+		for (const Bus* bus_ptr : request_handler_.GetAllBuses()) {
+			buses.insert(bus_ptr);
+		}
+
 		map_renderer_.RenderMap(render_settings_, buses).Render(output);
 
 		json::Builder answer;
 		answer.StartDict()
 			.Key("request_id").Value(id)
 			.Key("map").Value(output.str())
-		.EndDict();
+			.EndDict();
 
 		return answer.Build();
 	}
 
-	std::set< const Bus*, CompareBuses > JSONReader::GetBuses() const {
-		std::set< const Bus*, CompareBuses > buses;
-		for (const json::Node& bus_json : base_requests_.GetRoot().AsArray()) {
-			if (bus_json.AsDict().at("type") == "Bus") {
-				buses.insert(
-					catalogue_.FindBus(bus_json.AsDict().at("name").AsString())
-				);
-			}
-		}
-		return buses;
-	}
-
-	void JSONReader::PrintAnswer(std::ostream& output) {
-		json::Print(answers_, output);
+	void JSONReader::PrintAnswer(std::ostream& output, const json::Document& answers) {
+		json::Print(answers, output);
 	}
 
 } // namespace catalogue
