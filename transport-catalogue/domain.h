@@ -7,6 +7,8 @@
 #include <set>
 #include <unordered_set>
 #include <deque>
+#include <optional>
+#include <variant>
 
 namespace catalogue {
 
@@ -41,14 +43,40 @@ namespace catalogue {
 		std::unordered_set<const Bus*> buses;
 	};
 
+	using EdgeId = size_t;
+	using VertexId = size_t;
+
+	struct EdgeWaitInfo {
+		const Stop* stop = nullptr;
+		double weight = 0;
+	};
+
+	struct EdgeBusInfo {
+		const Bus* bus = nullptr;
+		double weight = 0;
+		size_t span_count = 0;
+	};
+
+	using EdgeInfo = std::variant<EdgeWaitInfo, EdgeBusInfo>;
+
+	struct RoutingSettings {
+		double bus_velocity = 40; // meter per minute
+		double bus_wait_time = 6; // minute
+	};
+
+	struct PairVertexesId {
+		VertexId begin_wait;
+		VertexId end_wait;
+	};
+
 	struct CompareBuses {
 	public:
 		bool operator()(const Bus* l, const Bus* r) const;
 	};
-	
+
 	struct CompareStop {
-		public:
-			bool operator()(const Stop* l, const Stop* r) const;
+	public:
+		bool operator()(const Stop* l, const Stop* r) const;
 	};
 
 } // namespace catalogue
