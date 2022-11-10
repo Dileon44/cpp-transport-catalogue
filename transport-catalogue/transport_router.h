@@ -43,15 +43,13 @@ namespace catalogue {
 		using Router = graph::Router<double>;
 	
 	public:
-		TransportRouter(const TransportCatalogue& catalogue, RoutingSettings routing_settings)
-		: catalogue_(catalogue) {
-			routing_settings_ = std::move(routing_settings);
-		}
+		TransportRouter(const TransportCatalogue& catalogue, RoutingSettings routing_settings);
 
 		void BuildGraphAndRouter();
-		std::optional<graph::Router<double>::RouteInfo> BuildRoute(VertexId from, VertexId to) const;
 
-		const PairVertexesId& GetPairVertexesId(std::string stop_name) const;
+		std::optional<graph::Router<double>::RouteInfo> BuildRoute(
+			std::string_view stop_from, std::string_view stop_to) const;
+
 		const EdgeInfo& GetEdgeInfo(const EdgeId edge_id) const;
 
 	private:
