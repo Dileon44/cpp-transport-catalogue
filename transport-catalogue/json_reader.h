@@ -34,18 +34,16 @@ namespace catalogue {
 		json::Document GenerateAnswer(const TransportRouter& transport_router,
 									  const json::Document& stat_requests) const;
 
-		void PrintAnswer(std::ostream& output, const json::Document& answers);
-
 	private:
 		TransportCatalogue& catalogue_;
 		RequestHandler& request_handler_;
 		renderer::MapRenderer& map_renderer_;
 		renderer::RenderSettings render_settings_;
 
-		json::Node ConvertEdgeInfo(const EdgeId edge_id) const;
+		json::Node ConvertEdgeInfo(const TransportRouter& router, const EdgeId edge_id) const;
 
 		std::optional<graph::Router<double>::RouteInfo> BuildRoute(
-			const TransportRouter& transport_router, const json::Node& request) const;
+			const TransportRouter& router, const json::Node& request) const;
 
 		svg::Color ReadUnderlayerColor(const std::map<std::string, json::Node>& s) const;
 		std::vector<svg::Color> ReadColorPalette(const std::map<std::string, json::Node>& s) const;
@@ -59,7 +57,7 @@ namespace catalogue {
 		json::Node GenerateAnswerBus(const json::Node& request) const;
 		json::Node GenerateAnswerStop(const json::Node& request) const;
 		json::Node GenerateAnswerMap(const int id) const;
-		json::Node GenerateAnswerRoute(const TransportRouter& transport_router,	
+		json::Node GenerateAnswerRoute(const TransportRouter& router,	
 			const json::Node& request) const;
 	};
 
