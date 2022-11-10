@@ -17,11 +17,9 @@ namespace catalogue {
 
 	JSONReader::JSONReader(
 		TransportCatalogue& catalogue,
-		RequestHandler& request_handler,
 		renderer::MapRenderer& map_renderer)
 
 		: catalogue_(catalogue)
-		, request_handler_(request_handler)
 		, map_renderer_(map_renderer) {
 	}
 
@@ -238,13 +236,15 @@ namespace catalogue {
 		std::string_view bus_name = request.AsDict().at("name").AsString();
 		json::Builder answer;
 		answer.StartDict().Key("request_id").Value(request.AsDict().at("id").AsInt());
-
+		
+		const BusInfo bus_info = std::move(catalogue_.GetBusInfo(bus_name));
+		
 		if (catalogue_.FindBus(bus_name)) {
-			answer.Key("curvature").Value(request_handler_.GetBusStat(bus_name)->curvature)
-				.Key("route_length").Value(request_handler_.GetBusStat(bus_name)->length_route)
-				.Key("stop_count").Value(static_cast<int>(request_handler_.GetBusStat(bus_name)->number_stops))
-				.Key("unique_stop_count").Value(static_cast<int>(request_handler_.GetBusStat(bus_name)->unique_stops))
-				.EndDict();
+			answer.Key("curvature").Value(bus_info.curvature)
+				.Key("route_length").Value(bus_info.length_route)
+				.Key("stop_count").Value(static_cast<int>(bus_info.number_stops))
+				.Key("unique_stop_count").Value(static_cast<int>(bus_info.unique_stops))
+			.EndDict();
 		}
 		else {
 			answer.Key("error_message").Value("not found").EndDict();
@@ -261,7 +261,7 @@ namespace catalogue {
 			answer.Key("buses").StartArray();
 
 			std::vector<json::Node> buses;
-			for (const auto& bus : request_handler_.GetBusesByStop(stop_name)) {
+			for (const auto& bus : catalogue_.GetStopInfo(stop_name).buses) {
 				buses.push_back(bus->name);
 			}
 			std::sort(buses.begin(), buses.end(), [&](const json::Node& l, const json::Node& r) {
@@ -285,8 +285,9 @@ namespace catalogue {
 
 	json::Node JSONReader::GenerateAnswerRoute(const TransportRouter& router,
 		const json::Node& request) const {
-
-		auto route_info = BuildRoute(router, request);
+		
+		auto route_info = router.BuildRoute(request.AsDict().at("from").AsString(),
+											request.AsDict().at("to").AsString());
 		if (!route_info) {
 			return json::Builder{}.StartDict().
 				Key("request_id").Value(request.AsDict().at("id").AsInt()).
@@ -328,25 +329,11 @@ namespace catalogue {
 		.EndDict().Build();
 	}
 
-	std::optional<graph::Router<double>::RouteInfo> JSONReader::BuildRoute(const TransportRouter& router,
-		const json::Node& request) const {
-		
-		const VertexId from = router.GetPairVertexesId(request.AsDict().at("from").AsString()).begin_wait;
-		const VertexId to = router.GetPairVertexesId(request.AsDict().at("to").AsString()).begin_wait;
-
-		auto route_info_ptr = router.BuildRoute(from, to);
-		if (!route_info_ptr) {
-			return {};
-		}
-
-		return route_info_ptr;
-	}
-
 	json::Node JSONReader::GenerateAnswerMap(const int id) const {
 		std::ostringstream output;
 
 		std::set< const Bus*, CompareBuses > buses;
-		for (const Bus* bus_ptr : request_handler_.GetAllBuses()) {
+		for (const Bus* bus_ptr : catalogue_.GetAllBuses()) {
 			buses.insert(bus_ptr);
 		}
 
