@@ -48,13 +48,9 @@ namespace catalogue {
 
 	void TransportCatalogue::SetDistance(std::string_view from, std::string_view to, size_t distance) {
 
-		if (!distances_.count({ FindStop(from), FindStop(to) })) { // возможно не нужное условие
+		if (!distances_.count({ FindStop(from), FindStop(to) })) {
 			distances_.insert({ {FindStop(from), FindStop(to)}, distance });
 		}
-	}
-
-	void TransportCatalogue::SetRoutingSettings(RoutingSettings routing_settings) {
-		routing_settings_ = std::move(routing_settings);
 	}
 
 	BusInfo TransportCatalogue::GetBusInfo(std::string_view bus) const {
@@ -91,18 +87,6 @@ namespace catalogue {
 		}
 
 		return distances_.at({ FindStop(to), FindStop(from) });
-	}
-
-	const Graph& TransportCatalogue::GetGraph() const {
-		return *graph_ptr_;
-	}
-
-	const PairVertexesId& TransportCatalogue::GetPairVertexesId(std::string stop_name) const {
-		return stop_to_pair_vertex_.at(FindStop(stop_name));
-	}
-
-	const EdgeInfo& TransportCatalogue::GetEdgeInfo(const EdgeId edge_id) const {
-		return edges_info_.at(edge_id);
 	}
 
 	class HasherUnique {
@@ -167,41 +151,6 @@ namespace catalogue {
 			stops.insert(stop_ptr);
 		}
 		return stops;
-	}
-
-	void TransportCatalogue::BuildVertexes() {
-		size_t count_vertex = 0;
-		for (const auto [_, stop_ptr] : stop_to_ptr_stop_) {
-			stop_to_pair_vertex_.insert({ stop_ptr, PairVertexesId{ count_vertex++, count_vertex++ } });
-		}
-	}
-
-	void TransportCatalogue::BuildGraph() {
-		BuildVertexes();
-		
-		size_t number_all_stops = stop_to_pair_vertex_.size();
-		graph_ptr_ = std::make_unique<Graph>(Graph(2 * number_all_stops));
-		edges_info_.reserve(2 * number_all_stops);
-		
-		for (const auto& [stop, pair_vertexes] : stop_to_pair_vertex_) {
-			graph_ptr_->AddEdge(graph::Edge<double>{
-				pair_vertexes.begin_wait, pair_vertexes.end_wait, routing_settings_.bus_wait_time
-			});
-			edges_info_.push_back(EdgeWaitInfo{ stop, routing_settings_.bus_wait_time });
-		}
-
-		for (const auto [_, bus] : bus_to_ptr_bus_) {
-			if (bus->type_route == TypeRoute::CIRCLE) {
-				AddEdgeBusInfo(bus->stops.begin(), bus->stops.end(), bus);
-			}
-			else {
-				size_t half = (bus->stops.size() + 1) / 2;
-				auto middle_it = std::next(bus->stops.begin(), half);
-				auto rmiddle_it = std::next(bus->stops.rbegin(), half);
-				AddEdgeBusInfo(bus->stops.begin(), middle_it, bus);
-				AddEdgeBusInfo(rmiddle_it - 1, bus->stops.rend(), bus);
-			}
-		}
 	}
 
 } // namespace catalogue
