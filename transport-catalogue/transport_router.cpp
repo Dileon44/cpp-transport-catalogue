@@ -1,7 +1,14 @@
 #include "transport_router.h"
 #include "router.h"
 
+#include <string_view>
+
 namespace catalogue {
+
+	TransportRouter::TransportRouter(const TransportCatalogue& catalogue, RoutingSettings routing_settings)
+		: catalogue_(catalogue) {
+		routing_settings_ = std::move(routing_settings);
+	}
 
 	void TransportRouter::BuildGraphAndRouter() {
 		BuildVertexes();
@@ -40,12 +47,20 @@ namespace catalogue {
 	}
 
 	std::optional<graph::Router<double>::RouteInfo> TransportRouter::BuildRoute(
-		VertexId from, VertexId to) const {
-		return router_->BuildRoute(from, to);
-	}
+		std::string_view stop_from, std::string_view stop_to) const {
+		if (!router_) {
+			throw std::logic_error("Router no initialization");
+		}
 
-	const PairVertexesId& TransportRouter::GetPairVertexesId(std::string stop_name) const {
-		return stop_to_pair_vertex_.at(catalogue_.FindStop(stop_name));
+		const VertexId from = stop_to_pair_vertex_.at(catalogue_.FindStop(stop_from)).begin_wait;
+		const VertexId to = stop_to_pair_vertex_.at(catalogue_.FindStop(stop_to)).begin_wait;
+
+		auto route_info_ptr = router_->BuildRoute(from, to);
+		if (!route_info_ptr) {
+			return {};
+		}
+
+		return router_->BuildRoute(from, to);
 	}
 
 	const EdgeInfo& TransportRouter::GetEdgeInfo(const EdgeId edge_id) const {
