@@ -7,14 +7,15 @@
 int main() {
 	catalogue::TransportCatalogue catalogue;
 	catalogue::renderer::MapRenderer map_renderer;
-	catalogue::RequestHandler request_handler(catalogue, map_renderer);
-	catalogue::JSONReader json_reader(catalogue, request_handler, map_renderer);
+	catalogue::JSONReader json_reader(catalogue, map_renderer);
 
 	catalogue::Data data = std::move(json_reader.ReadJSON(std::cin));
 
+	catalogue::TransportRouter transport_router(catalogue, data.routing_settings);
+	catalogue::RequestHandler request_handler(catalogue, map_renderer, transport_router);
+	
 	json_reader.BuildDataBase(data);
-	catalogue.BuildGraph();
-	catalogue::TransportRouter transport_router(catalogue.GetGraph());
+	transport_router.BuildGraphAndRouter();
 
 	json::Document answers = std::move(json_reader.GenerateAnswer(transport_router, data.stat_requests));
 	json::Print(answers, std::cout);
