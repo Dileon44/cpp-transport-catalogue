@@ -152,7 +152,6 @@ namespace catalogue {
 
 	void JSONReader::BuildDataBase(const Data& data) {
 		render_settings_ = data.render_settings;
-		catalogue_.SetRoutingSettings(data.routing_settings);
 
 		for (const json::Node& json_doc : data.base_requests.GetRoot().AsArray()) {
 			if (json_doc.IsDict() && json_doc.AsDict().at("type") == "Stop") {
@@ -284,33 +283,33 @@ namespace catalogue {
 		return answer.Build();
 	}
 
-	json::Node JSONReader::GenerateAnswerRoute(const TransportRouter& transport_router,
+	json::Node JSONReader::GenerateAnswerRoute(const TransportRouter& router,
 		const json::Node& request) const {
 
-		auto route_info = BuildRoute(transport_router, request);
+		auto route_info = BuildRoute(router, request);
 		if (!route_info) {
 			return json::Builder{}.StartDict().
 				Key("request_id").Value(request.AsDict().at("id").AsInt()).
-				Key("error_message").Value("not found").
-				EndDict().Build();
+				Key("error_message").Value("not found")
+			.EndDict().Build();
 		}
 
 		json::Array items;
 		for (const auto& edge_id : route_info->edges) {
-			items.emplace_back(ConvertEdgeInfo(edge_id));
+			items.emplace_back(ConvertEdgeInfo(router, edge_id));
 		}
 
 		return json::Builder{}.StartDict()
 			.Key("request_id").Value(request.AsDict().at("id").AsInt())
 			.Key("total_time").Value(route_info->weight)
 			.Key("items").Value(items)
-			.EndDict().Build();
+		.EndDict().Build();
 	}
 
-	json::Node JSONReader::ConvertEdgeInfo(const EdgeId edge_id) const {
+	json::Node JSONReader::ConvertEdgeInfo(const TransportRouter& router, const EdgeId edge_id) const {
 
-		if (std::holds_alternative<EdgeBusInfo>(catalogue_.GetEdgeInfo(edge_id))) {
-			const EdgeBusInfo edge_info = std::get<EdgeBusInfo>(catalogue_.GetEdgeInfo(edge_id));
+		if (std::holds_alternative<EdgeBusInfo>(router.GetEdgeInfo(edge_id))) {
+			const EdgeBusInfo edge_info = std::get<EdgeBusInfo>(router.GetEdgeInfo(edge_id));
 
 			return json::Builder{}.StartDict()
 				.Key("type").Value("Bus")
@@ -320,7 +319,7 @@ namespace catalogue {
 			.EndDict().Build();
 		}
 
-		const EdgeWaitInfo edge_info = std::get<EdgeWaitInfo>(catalogue_.GetEdgeInfo(edge_id));
+		const EdgeWaitInfo edge_info = std::get<EdgeWaitInfo>(router.GetEdgeInfo(edge_id));
 
 		return json::Builder{}.StartDict()
 			.Key("type").Value("Wait")
@@ -329,13 +328,13 @@ namespace catalogue {
 		.EndDict().Build();
 	}
 
-	std::optional<graph::Router<double>::RouteInfo> JSONReader::BuildRoute(const TransportRouter& transport_router,
+	std::optional<graph::Router<double>::RouteInfo> JSONReader::BuildRoute(const TransportRouter& router,
 		const json::Node& request) const {
 		
-		const VertexId from = catalogue_.GetPairVertexesId(request.AsDict().at("from").AsString()).begin_wait;
-		const VertexId to = catalogue_.GetPairVertexesId(request.AsDict().at("to").AsString()).begin_wait;
+		const VertexId from = router.GetPairVertexesId(request.AsDict().at("from").AsString()).begin_wait;
+		const VertexId to = router.GetPairVertexesId(request.AsDict().at("to").AsString()).begin_wait;
 
-		auto route_info_ptr = transport_router.BuildRoute(from, to);
+		auto route_info_ptr = router.BuildRoute(from, to);
 		if (!route_info_ptr) {
 			return {};
 		}
@@ -360,10 +359,6 @@ namespace catalogue {
 			.EndDict();
 
 		return answer.Build();
-	}
-
-	void JSONReader::PrintAnswer(std::ostream& output, const json::Document& answers) {
-		json::Print(answers, output);
 	}
 
 } // namespace catalogue
